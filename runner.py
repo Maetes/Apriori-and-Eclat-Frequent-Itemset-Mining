@@ -17,9 +17,11 @@ import time
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+from benchmark import Benchmark
+
 #-----------------------------#
-from apriori import apriori
-from eclat import eclat
+from .apriori import apriori
+from .eclat import eclat
 #-----------------------#
 plt.switch_backend('agg')
 plt.rcParams.update({'figure.max_open_warning': 0})
@@ -65,7 +67,7 @@ def read_data(data_path, skip_header=False, toy_data=False):
 	data = []
 	if not os.path.isfile(data_path): raise ValueError('Invalid data path.')
 	with open(data_path, 'r', encoding='utf-8') as f:
-		file = csv.reader(f, delimiter=' ', quotechar='\r')
+		file = csv.reader(f, delimiter=',', quotechar='\t')
 		if skip_header: next(file, None)  # skip the headers
 		for row in file:
 			data.append(row)
@@ -91,18 +93,36 @@ def run_algorithm(data, mode, support, iterative, use_CUDA, block, thread):
 ################
 # WRITE RESULT #
 ################
-def write_result(result, result_path):
+def write_result(result, data, duration, cpuBench, memoryBench, startCpu, startMemory):
+	import sys
+	import pandas as pd
 	if len(result[0]) == 0: print('Found 0 frequent itemset, please try again with a lower minimum support value!')
-	with open(result_path, 'w', encoding='big5') as file:
-		file_data = csv.writer(file, delimiter=',', quotechar='\r')
-		for itemset_K in result[0]:
-			for itemset in itemset_K:
-				output_string = ''
-				for item in itemset: output_string += str(item)+' '
-				output_string += '(' + str(result[1][itemset]) +  ')'
-				file_data.writerow([output_string])
-	print('Results have been successfully saved to: %s' % (result_path))
-	return True
+	generateItemsets = []
+	generateSupport = []
+	frame = pd.DataFrame(columns=['itemsets','support'])
+	for itemset_K in result[0]:
+		for itemset in itemset_K:
+			generateItemsets.append(frozenset(itemset))
+			generateSupport.append(float(result[1][itemset]/len(data)))
+	frame['itemsets'] = generateItemsets
+	frame['support'] = generateSupport
+	# frame.to_csv(result_path, encoding='utf-8', index=None, sep=';')
+	#print('Results have been successfully saved to: %s' % (result_path))
+
+	class returnObj():
+		class start():
+			pass
+		class end():
+			pass
+	
+	returnObj.start.cpu = startCpu
+	returnObj.start.memory = startMemory
+	returnObj.end.freq = frame
+	returnObj.end.time = duration[0]
+	returnObj.end.cpu = cpuBench
+	returnObj.end.memory = memoryBench
+
+	return returnObj
 
 def assert_at_most_one_is_true(*args):
     return sum(args) <= 1
@@ -114,8 +134,34 @@ def assert_at_most_one_is_true(*args):
 	main function that runs the two algorithms, 
 	and plots different experiment results.
 """
-def main():
-	args = get_config()
+def main(mode, database, support):
+	startBencher = Benchmark()
+	startBencher.start()
+	startCpu, startMemory = startBencher.stop()
+	startBencher.join()
+
+	class obi():
+		pass
+	args = obi()
+	
+	# args.output_path = "a.txt"
+	args.block = 0
+	args.thread = 0
+	args.compare_gpu = False
+	args.plot_thread = False
+	args.plot_block = False
+	args.plot_support_gpu = False
+	args.plot_support = False
+	args.use_CUDA = False
+	args.toy_data = False
+	args.iterative = False
+	args.min_support = support
+	args.mode = mode
+	args.input_path = database
+	hardwareBencher = Benchmark()
+            
+
+
 	data = read_data(args.input_path, toy_data=args.toy_data)
 	
 	#---argument error handling---#
@@ -148,6 +194,8 @@ def main():
 	duration2 = []
 	for v in experiment_list:
 		print('-'*77)
+
+		hardwareBencher.start()
 		start_time = time.time()
 		if args.plot_thread:
 			result = run_algorithm(data, args.mode, args.min_support, args.iterative, args.use_CUDA, block=args.block, thread=v)
@@ -161,6 +209,9 @@ def main():
 			result[1]: the dictionary storing the support of each itemset
 		"""
 		duration.append(time.time() - start_time)
+		cpuBench, memoryBench = hardwareBencher.stop()
+		hardwareBencher.join()
+
 		print("Time duration: %.5f" % (duration[-1]))
 		if args.compare_gpu:
 			start_time = time.time()
@@ -198,7 +249,7 @@ def main():
 		plt.grid()
 		fig.savefig('./data/' + title + '.jpeg')
 	else:
-		done = write_result(result, args.output_path)
+		return write_result(result, data, duration, cpuBench, memoryBench, startCpu, startMemory)
 
 
 if __name__ == '__main__':

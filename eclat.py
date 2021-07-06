@@ -12,10 +12,10 @@
 ###############
 import numpy as np
 try:
-	import pycuda.gpuarray as gpuarray
-	import pycuda.driver as cuda
-	import pycuda.autoinit
-	from pycuda.compiler import SourceModule
+#	import pycuda.gpuarray as gpuarray
+#	import pycuda.driver as cuda
+#	import pycuda.autoinit
+#	from pycuda.compiler import SourceModule
 	CUDA_FLAG = True
 except:
 	CUDA_FLAG = False
@@ -42,7 +42,7 @@ def compute_vertical_bitvector_data(data, use_CUDA):
 			if not item in item2idx:
 				item2idx[item] = idx
 				idx += 1
-	idx2item = { idx : str(int(item)) for item, idx in item2idx.items() }
+	idx2item = { idx : str(item) for item, idx in item2idx.items() }
 	#---build vertical data---#
 	vb_data = np.zeros((len(item2idx), len(data)), dtype=int)
 	for trans_id, transaction in enumerate(data):
@@ -175,7 +175,7 @@ class eclat_runner:
 						if np.sum(union_bitvector) >= self.min_support:
 							suffix.append([itemset_sub, union_bitvector])
 
-				self.run(prefix+[itemset], sorted(suffix, key=lambda x: int(x[0]), reverse=True))
+				self.run(prefix+[itemset], sorted(suffix, key=lambda x: str(x[0]), reverse=True))
 	
 
 	def cuda_run(self, prefix, supportK):
@@ -225,7 +225,7 @@ class eclat_runner:
 def output_handling(support_list):
 	L = []
 	for itemset, count in sorted(support_list.items(), key=lambda x: len(x[0])):
-		itemset = tuple(sorted(list(itemset), key=lambda x: int(x)))
+		itemset = tuple(sorted(list(itemset), key=lambda x: str(x)))
 		if len(L) == 0:
 			L.append([itemset])
 		elif len(L[-1][0]) == len(itemset):
@@ -236,7 +236,7 @@ def output_handling(support_list):
 		else: raise ValueError()
 	if len(L) != 0: L[-1] = sorted(L[-1])
 	L = tuple(L)
-	support_list = dict((tuple(sorted(list(k), key=lambda x: int(x))), v) for k, v in support_list.items())
+	support_list = dict((tuple(sorted(list(k), key=lambda x: str(x))), v) for k, v in support_list.items())
 	return L, support_list
 
 
@@ -284,7 +284,6 @@ def eclat(data, min_support, iterative=False, use_CUDA=False, block=None, thread
 	elif not iterative:
 		if use_CUDA and not CUDA_FLAG: use_CUDA = False
 		vb_data, idx2item = compute_vertical_bitvector_data(data, use_CUDA=use_CUDA)
-
 		#---pre allocate memory---#
 		if use_CUDA:
 			N = np.int32(vb_data.shape[1])
@@ -297,7 +296,7 @@ def eclat(data, min_support, iterative=False, use_CUDA=False, block=None, thread
 		
 		#---eclat class runner---#
 		eclat = eclat_runner(num_trans, min_support, use_CUDA, block, thread, use_optimal=True)
-		eclat.run([], sorted(supportK, key=lambda x: int(x[0])))
+		eclat.run([], sorted(supportK, key=lambda x: str(x[0])))
 
 		support_list = eclat.get_result()
 		L, support_list = output_handling(support_list)
